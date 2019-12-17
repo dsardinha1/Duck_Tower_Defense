@@ -1,6 +1,7 @@
 import arcade
 import gameData as gameDt
 import pathlib
+from pathfinding import *
 
 
 
@@ -22,8 +23,6 @@ class AracdeWindow(arcade.Window):
 
         def __init__(self, width, height, title):
             super().__init__(width, height, title)
-
-
             self.map_loction = None
             self.spawn_e = None
             self.start_wave = None
@@ -46,6 +45,13 @@ class AracdeWindow(arcade.Window):
             self.river_list = None
             self.wall_list = None
             self.base_list = None
+
+            self.map_fig_temp = None
+            self.map_plot_list = None
+            self.map_plot = None
+            self.map_scan = None
+            self.start_goal = None
+            self.end_goal = None
 
             self.tower_menu = None
             self.select_tower = None
@@ -140,8 +146,21 @@ class AracdeWindow(arcade.Window):
                 self.select_tower = False
                 self.select_tower_type = 0
 
-                self.sound_loction = pathlib.Path.cwd() / 'sounds'
 
+
+                self.map_plot = GridWithWeights(int(SCREEN_W/32), int(SCREEN_H/32))
+                self.map_scan = False
+                self.map_plot_list = arcade.SpriteList()
+                self.map_fig_temp = arcade.Sprite(str(pathlib.Path.cwd()) + "/map/tile_sets/tile_one/tile016.png", SCREEN_SCALING, image_height=16, image_width=16, center_x=944, center_y=784)
+                self.map_fig_temp.alpha = 255
+                self.start_goal = (0, 0)
+                self.end_goal = (27, 5)
+                self.map_plot_list.append(self.map_fig_temp)
+
+
+                self.sound_loction = pathlib.Path.cwd() / 'sounds'
+            elif self.currentGameState == "Lost":
+                pass
             else:
                 print('Menu Screen')
 
@@ -193,6 +212,8 @@ class AracdeWindow(arcade.Window):
                        self.place_tower() #will place a given tower if was previously clicked
                    self.tower_menu = False
                    self.select_tower = False
+           else:
+               pass
            pass
 
         def on_mouse_release(self, x: float, y: float, button: int,
@@ -223,8 +244,8 @@ class AracdeWindow(arcade.Window):
                 self.river_list.draw()
                 self.wall_list.draw()
                 self.base_list.draw()
-
                 gameDt.tower_list.draw()
+                self.map_plot_list.draw()
                 gameDt.bullet_list.draw()
                 gameDt.traps_list.draw()
                 gameDt.enemy_list.draw()
@@ -237,6 +258,8 @@ class AracdeWindow(arcade.Window):
                 self.draw_currency()
 
                 gameDt.explosion_list.draw() #current bug in the method
+            elif self.currentGameState == "Lost":
+                self.draw_game_over()
             else:
                 pass
             arcade.finish_render()
@@ -247,6 +270,9 @@ class AracdeWindow(arcade.Window):
             if self.currentGameState == "Open_Menu":
                 pass
             elif self.currentGameState == "Play_Game":
+
+
+                self.update_enemy_maps()
                 self.increment_wave_timer()
                 gameDt.enemy_list.update()
                 gameDt.enemy_list.update_animation()
@@ -257,8 +283,42 @@ class AracdeWindow(arcade.Window):
                 self.handle_wave()
                 self.update_enemy_collisions()
                 gameDt.explosion_list.update()
+            elif self.currentGameState == "Lost":
+                pass
             else:
                 pass
+
+        def update_enemy_maps(self):
+
+            org_x = 16
+            org_y = 16
+            walls = []
+
+            if not self.map_scan:
+
+                for x in range(30):
+                    for y in range(25):
+
+
+                        self.map_fig_temp.set_position(((org_x * x * 2) + 16), ((org_y * y * 2) + 16))
+                        map_wall_check = arcade.check_for_collision_with_list(self.map_fig_temp, self.wall_list)
+                        map_river_check = arcade.check_for_collision_with_list(self.map_fig_temp, self.river_list)
+                        map_tower_check = self.tower_collision(self.map_fig_temp, gameDt.tower_list)
+
+                        if ((len(map_wall_check)) or len(map_river_check)) >= 1:
+                            walls += [(x,y)]
+                        elif map_tower_check != None:
+                            walls += [(x, y)]
+                        else:
+                            pass
+
+                self.map_plot.walls = walls
+                self.map_scan = True
+
+                for enemy in gameDt.enemy_list:
+                    enemy.nav_map = self.map_plot
+
+
 
 
         def place_tower(self):
@@ -276,6 +336,7 @@ class AracdeWindow(arcade.Window):
                     gameDt.tower_list.append(self.fireball_tower)
                     self.curreny -= 450
                     self.buy_status = True
+                    self.map_scan = False
                 else:
                     self.buy_status = False
             elif self.select_tower_type == 3:
@@ -284,6 +345,7 @@ class AracdeWindow(arcade.Window):
                     gameDt.tower_list.append(self.rock_tower)
                     self.curreny -= 35
                     self.buy_status = True
+                    self.map_scan = False
                 else:
                     self.buy_status = False
             elif self.select_tower_type == 4:
@@ -292,6 +354,7 @@ class AracdeWindow(arcade.Window):
                     gameDt.tower_list.append(self.ironball_tower)
                     self.curreny -= 150
                     self.buy_status = True
+                    self.map_scan = False
                 else:
                     self.buy_status = False
             elif self.select_tower_type == 5:
@@ -300,6 +363,7 @@ class AracdeWindow(arcade.Window):
                     gameDt.tower_list.append(self.stone_tower)
                     self.curreny -= 50
                     self.buy_status = True
+                    self.map_scan = False
                 else:
                     self.buy_status = False
             pass
@@ -307,30 +371,9 @@ class AracdeWindow(arcade.Window):
 
 
         def update_enemy_collisions(self):
-            #Handles enemies colliding with river tiles
-            for river_tile in self.river_list:
-                enemy_river_tile_collide = arcade.check_for_collision_with_list(river_tile, gameDt.enemy_list)
 
-                for enemy in enemy_river_tile_collide:
-                    enemy.move_auto()
-                    pass
-
-            # Handles enemies colliding with wall tiles
-            for wall_tile in self.wall_list:
-                enemy_wall_tile_collide = arcade.check_for_collision_with_list(wall_tile, gameDt.enemy_list)
-
-                for enemy in enemy_wall_tile_collide:
-                    enemy.move_auto()
-
-            # Handles enemies colliding into the towers
             for enemy in gameDt.enemy_list:
-                enemy_c = self.tower_collision(enemy, gameDt.tower_list)
-
-                if enemy_c == None:
-                    pass
-                else:
-                    enemy_c.move_auto()
-
+                enemy.move_auto()
 
             #Handles enemies colliding into the base and reduces health
             for base_tile in self.base_list:
@@ -339,6 +382,10 @@ class AracdeWindow(arcade.Window):
                 for enemy in enemy_base_tile_collide:
                     enemy.kill()
                     self.base_health -= 5
+                    self.death_num += 1
+
+                    if self.base_health <= 0:
+                        self.currentGameState = "Lost"
 
             #Handles any bullets that hit the enemy
             for bullet in gameDt.bullet_list:
@@ -486,7 +533,13 @@ class AracdeWindow(arcade.Window):
             self.wave_timer = 5
             gameDt.tower_list = arcade.SpriteList()
             gameDt.enemy_list = arcade.SpriteList()
+            gameDt.traps_list = arcade.SpriteList(2)
 
+        def draw_game_over(self):
+            """Logic for Game over screen"""
+            arcade.draw_text("Game over!", SCREEN_W / 2, SCREEN_H / 2, arcade.color.ALLOY_ORANGE, font_size=64,
+                             font_name='arial', anchor_x='center')
+            arcade.set_background_color(arcade.color.BAKER_MILLER_PINK)
             
         def increment_wave_timer(self):
             if self.wave_counter % 100 == 0:
@@ -627,7 +680,7 @@ class AracdeWindow(arcade.Window):
         def draw_base_health(self):
             arcade.draw_rectangle_filled(875, 300, self.base_health, 10, arcade.color.RED_DEVIL)
             arcade.draw_rectangle_outline(875, 300, 100, 10, arcade.color.BLACK)
-            pass
+
 
         def draw_wave_count_down_time(self):
             wave = "Wave Start: " + str(self.wave_timer)
@@ -639,15 +692,15 @@ class AracdeWindow(arcade.Window):
 
         def spawn_enemies(self, type):
             if type == 1:
-                    self.spawn_e = gameDt.BatEnemy(1.25, 0, 65, 2, 32, 32, 100)
+                    self.spawn_e = gameDt.BatEnemy(1.25, 0, 64, 2, 32, 32, 100, self.map_plot, self.end_goal)
                     self.spawn_e.move("right")
                     gameDt.enemy_list.append(self.spawn_e)
             elif type == 2:
-                    self.spawn_e = gameDt.HorseEnemy(1, 0, 65, 3, 64, 64, 200)
+                    self.spawn_e = gameDt.HorseEnemy(1, 0, 64, 3, 64, 64, 200, self.map_plot, self.end_goal)
                     self.spawn_e.move("right")
                     gameDt.enemy_list.append(self.spawn_e)
             elif type == 3:
-                    self.spawn_e = gameDt.SpiderEnemy(1, 0, 65, 3.5, 64, 64, 350)
+                    self.spawn_e = gameDt.SpiderEnemy(1, 0, 64, 3.5, 64, 64, 350, self.map_plot, self.end_goal)
                     self.spawn_e.move("right")
                     gameDt.enemy_list.append(self.spawn_e)
             pass

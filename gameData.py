@@ -4,6 +4,7 @@ import random
 import main
 import os
 import math
+from pathfinding import *
 
 
 """Global Variables"""
@@ -46,7 +47,7 @@ class Rock(Projectial):
     def __init__(self, x_pos, y_pos, angle):
         super().__init__(0.5, x_pos, y_pos, str(image_location) + "/rock/0.png", angle)
 
-class Tower(arcade.AnimatedWalkingSprite):
+class Tower(arcade.Sprite):
     def __init__(self, scale, x_pos, y_pos, frame_delay, firing_speed, firing_delay ,imageFileName):
         super().__init__(scale=scale,center_x=x_pos, center_y=y_pos)
         self.image_location = imageFileName
@@ -193,7 +194,7 @@ class Stone_Tower(Tower):
         self.range = 300
         self.attack = 3
 
-class Explosions(arcade.AnimatedTimeSprite):
+class Explosions(arcade.Sprite):
     def __init__(self, scale, x_pos, y_pos, frame_delay):
         super().__init__(scale=scale, center_x=x_pos, center_y=y_pos)
         self.frame_delay = frame_delay
@@ -336,7 +337,7 @@ class Rock(Projectial):
 
 
 class Enemy(arcade.AnimatedWalkingSprite):
-    def __init__(self, scale, x_pos, y_pos, speed, frameH, frameW, health):
+    def __init__(self, scale, x_pos, y_pos, speed, frameH, frameW, health, map ,end_goal):
         super().__init__(scale=scale, center_x=x_pos, center_y=y_pos)
         self.Frame_Height = frameH
         self.Frame_Width = frameW
@@ -344,7 +345,12 @@ class Enemy(arcade.AnimatedWalkingSprite):
         self.health = health
         self.direction = None
         self.hit_trap = False
+        self.nav_map = map
+        self.path = None
+        self.currentPos = (0,0)
+        self.end_goal = end_goal
         self.setup()
+
 
 
     def setup(self):
@@ -403,6 +409,7 @@ class Enemy(arcade.AnimatedWalkingSprite):
          print("error")
 
     def move_boundaries(self):
+
         dir = random.randint(0, 9)
 
         if self.top > main.SCREEN_H:
@@ -435,6 +442,30 @@ class Enemy(arcade.AnimatedWalkingSprite):
                 self.move("down")
 
     def move_auto(self):
+        currentPos = (round(self.center_x / 32), round(self.center_y / 40))
+        if self.currentPos != currentPos:
+            self.currentPos = currentPos
+            came_from, cost_so_far = a_star_search(self.nav_map, currentPos, self.end_goal)
+            pth = path(came_from, currentPos, self.end_goal)
+            nextstep = pth[1]
+
+            if currentPos[0] == nextstep[0]:
+                if currentPos[1] < nextstep[1]:
+                    self.move("up")
+                else:
+                    self.move("down")
+            elif currentPos[0] > nextstep[0]:
+                self.move("left")
+            elif currentPos[0] < nextstep[0]:
+                self.move("right")
+        else:
+            pass
+
+
+
+
+
+        """
         dir = random.randint(0, 9)
 
         if self.direction == "up":
@@ -479,7 +510,7 @@ class Enemy(arcade.AnimatedWalkingSprite):
                 self.move("left")
         else:
             self.move(None)#doesn't move; error
-
+        """
 
 #Image by bagzie from OpenGameArt.org
 
